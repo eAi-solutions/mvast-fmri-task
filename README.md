@@ -18,7 +18,6 @@ This program is designed to run on a **presentation computer** that is mirrored 
 
 - **Migraine History**: Participants with a history of migraine or photosensitivity should **NOT** perform this task, as flashing visual stimuli may trigger adverse reactions.
 - **Adverse Events**: Visual flashing stimuli may cause discomfort, headaches, or other adverse reactions in some individuals. Researchers should be prepared to monitor participants and respond to any adverse events.
-- **Participant Control**: Participants can stop the task at any time using the standard methods used at each institution/MRI facility. Ensure participants are informed of these stopping procedures before beginning the task.
 - **Participant Responsibility**: Participants should be informed that they participate at their own risk and should immediately stop the task if they experience any discomfort, dizziness, nausea, or other adverse symptoms.
 - **Researcher Monitoring**: Researchers should monitor participants throughout the task and be prepared to stop the task immediately if any adverse reactions occur.
 
