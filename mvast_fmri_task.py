@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-M-VAST fMRI Visual Task - Presentation Computer Application
+fMRI Visual Task - Presentation Computer Application
 Compatible with Windows (all versions) and macOS
-
-Developed by: eAi Solutions
-Based on: M-VAST 3 (Michigan Visual Aversion Stress Test)
-Original software by: Brock Pluimer & Steven Harte
-Original repository: https://github.com/brockpluimer/mvast3
 
 This program presents visual stimuli for fMRI experiments:
 - 5 cycles of alternating fixation (20s) and flashing checkerboard (20s)
 - Can be started manually (spacebar) or via scanner trigger signal
-- Instruction screen during dummy scans
-- Configurable color schemes (blue-yellow or black-white)
 """
 
 import pygame
@@ -26,7 +19,7 @@ from datetime import datetime
 
 # --- Application Constants ---
 APP_VERSION = "v1.0_2025"
-CONFIG_FILE = "mvast_fmri_task_config.json"
+CONFIG_FILE = "fmri_task_config.json"
 
 # Task Parameters
 NUM_CYCLES = 5
@@ -37,21 +30,17 @@ FLASH_FREQUENCY = 8.0  # Hz (8 Hz = 8 flashes per second)
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-BLUE = (0, 0, 255)  # Blue background for fixation
-YELLOW = (255, 255, 0)  # Yellow plus sign
 
 # Default configuration
 DEFAULT_CONFIG = {
-    "trigger_character": "=",  # Default trigger character (can be changed per scanner)
-    "start_mode": "both",  # Options: "manual", "trigger", or "both" (allows either)
-    "color_scheme": "blue_yellow",  # Options: "blue_yellow" or "black_white"
+    "trigger_character": "5",  # Common trigger characters: "5", "t", "T", etc.
     "use_serial_port": False,  # Set to True to use serial port for triggers
     "serial_port": None,  # e.g., "COM3" (Windows) or "/dev/ttyUSB0" (Mac/Linux)
     "images_dir": "images",
-    "fixation_image": None,  # Auto-set based on color_scheme, or specify manually
-    "checkerboard_image1": None,  # Auto-set based on color_scheme
-    "checkerboard_image2": None,  # Auto-set based on color_scheme
-    "instruction_image": None,  # Path to instruction image (e.g., "instruction.png"). If None, renders text
+    "fixation_image": None,  # If None, will render text '+' instead
+    "checkerboard_image1": "acheck_by.png",
+    "checkerboard_image2": "acheck_by_.png",
+    "instruction_image": None,  # Path to instruction image (e.g., "instruction.png")
     "instruction_text": None,  # Custom instruction text (if None, uses default). Only used if instruction_image is None
     "instruction_duration": 10.0  # Duration in seconds (for dummy scans/discarded acquisitions)
 }
@@ -67,57 +56,14 @@ def load_config():
             # Merge with defaults to ensure all keys exist
             merged = DEFAULT_CONFIG.copy()
             merged.update(config)
+            return merged
         except Exception as e:
             print(f"Error loading config: {e}. Using defaults.")
-            merged = DEFAULT_CONFIG.copy()
+            return DEFAULT_CONFIG.copy()
     else:
         # Create default config file
-        merged = DEFAULT_CONFIG.copy()
-        save_config(merged)
-    
-    # Auto-configure images based on color_scheme if not explicitly set
-    color_scheme = merged.get("color_scheme", "blue_yellow").lower()
-    
-    # Validate color_scheme
-    if color_scheme not in ["blue_yellow", "black_white"]:
-        print(f"Warning: Invalid color_scheme '{color_scheme}'. Using default 'blue_yellow'.")
-        color_scheme = "blue_yellow"
-        merged["color_scheme"] = color_scheme
-    
-    if color_scheme == "black_white":
-        if not merged.get("checkerboard_image1"):
-            merged["checkerboard_image1"] = "acheck_bw.png"
-        if not merged.get("checkerboard_image2"):
-            merged["checkerboard_image2"] = "acheck_bw_.png"
-        # Fixation will be rendered programmatically (black background, white plus)
-        # Only set if explicitly provided
-    else:  # blue_yellow (default)
-        if not merged.get("checkerboard_image1"):
-            merged["checkerboard_image1"] = "acheck_by.png"
-        if not merged.get("checkerboard_image2"):
-            merged["checkerboard_image2"] = "acheck_by_.png"
-        # Fixation will be rendered programmatically (blue background, yellow plus)
-        # Only set if explicitly provided
-    
-    # Validate start_mode
-    start_mode = merged.get("start_mode", "both").lower()
-    if start_mode not in ["manual", "trigger", "both"]:
-        print(f"Warning: Invalid start_mode '{start_mode}'. Using default 'both'.")
-        merged["start_mode"] = "both"
-    
-    # Validate instruction_duration
-    try:
-        duration = float(merged.get("instruction_duration", 10.0))
-        if duration < 0:
-            print(f"Warning: instruction_duration must be >= 0. Using default 10.0.")
-            merged["instruction_duration"] = 10.0
-        else:
-            merged["instruction_duration"] = duration
-    except (ValueError, TypeError):
-        print(f"Warning: Invalid instruction_duration. Using default 10.0.")
-        merged["instruction_duration"] = 10.0
-    
-    return merged
+        save_config(DEFAULT_CONFIG.copy())
+        return DEFAULT_CONFIG.copy()
 
 
 def save_config(config):
@@ -178,7 +124,6 @@ class TriggerInputHandler:
     
     def _read_serial_triggers(self):
         """Read trigger signals from serial port (if configured)."""
-        ser = None
         try:
             import serial
             ser = serial.Serial(self.serial_port, baudrate=9600, timeout=0.1)
@@ -196,6 +141,8 @@ class TriggerInputHandler:
                 except Exception as e:
                     print(f"Serial read error: {e}")
                 time.sleep(0.01)
+            
+            ser.close()
         except ImportError:
             print("WARNING: pyserial not installed. Install with: pip install pyserial")
             print("Falling back to keyboard input mode.")
@@ -203,14 +150,6 @@ class TriggerInputHandler:
         except Exception as e:
             print(f"Serial port error: {e}. Falling back to keyboard input.")
             self._read_keyboard_triggers()
-        finally:
-            # Ensure serial port is closed even if an error occurs
-            if ser is not None and ser.is_open:
-                try:
-                    ser.close()
-                    print("Serial port closed.")
-                except Exception as e:
-                    print(f"Error closing serial port: {e}")
     
     def check_trigger(self):
         """Check if a trigger has been received (non-blocking)."""
@@ -231,37 +170,21 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-def load_fixation_image(screen_width, screen_height, image_path=None, color_scheme="blue_yellow"):
-    """Load fixation image or create a rendered plus sign based on color scheme."""
-    # If image_path is explicitly provided, try to load it
-    if image_path:
-        images_dir = resource_path("images")
-        full_path = os.path.join(images_dir, image_path) if not os.path.isabs(image_path) else image_path
-        
-        if os.path.exists(full_path):
-            try:
-                img = pygame.image.load(full_path)
-                img = img.convert()
-                img = pygame.transform.scale(img, (screen_width, screen_height))
-                print(f"Fixation image loaded: {image_path}")
-                return img
-            except Exception as e:
-                print(f"Warning: Could not load fixation image {full_path}: {e}")
-        else:
-            print(f"Warning: Fixation image not found: {full_path}")
+def load_fixation_image(screen_width, screen_height, image_path=None):
+    """Load fixation plus image, or create a rendered plus sign."""
+    if image_path and os.path.exists(image_path):
+        try:
+            img = pygame.image.load(image_path)
+            img = img.convert()
+            img = pygame.transform.scale(img, (screen_width, screen_height))
+            return img
+        except Exception as e:
+            print(f"Warning: Could not load fixation image {image_path}: {e}")
     
-    # Create a rendered fixation based on color scheme
+    # Create a rendered plus sign as fallback
+    # Make it large and centered
     surface = pygame.Surface((screen_width, screen_height))
-    
-    # Set background color based on scheme
-    if color_scheme.lower() == "black_white":
-        bg_color = BLACK
-        cross_color = WHITE
-    else:  # blue_yellow (default)
-        bg_color = BLUE
-        cross_color = YELLOW
-    
-    surface.fill(bg_color)
+    surface.fill(BLACK)
     
     # Calculate size based on screen dimensions
     cross_size = min(screen_width, screen_height) // 8
@@ -269,22 +192,19 @@ def load_fixation_image(screen_width, screen_height, image_path=None, color_sche
     
     center_x, center_y = screen_width // 2, screen_height // 2
     
-    # Draw horizontal line of plus sign
-    pygame.draw.rect(surface, cross_color, 
+    # Draw horizontal line
+    pygame.draw.rect(surface, WHITE, 
                     (center_x - cross_size // 2, center_y - line_width // 2,
                      cross_size, line_width))
-    # Draw vertical line of plus sign
-    pygame.draw.rect(surface, cross_color,
+    # Draw vertical line
+    pygame.draw.rect(surface, WHITE,
                     (center_x - line_width // 2, center_y - cross_size // 2,
                      line_width, cross_size))
-    
-    scheme_name = "blue-yellow" if color_scheme.lower() == "blue_yellow" else "black-white"
-    print(f"Fixation created: {scheme_name} (background: {scheme_name.split('-')[0]}, plus: {scheme_name.split('-')[1]})")
     
     return surface
 
 
-def load_instruction_image(screen_width, screen_height, image_path=None, color_scheme="blue_yellow", instruction_text=None):
+def load_instruction_image(screen_width, screen_height, image_path=None, instruction_text=None, color_scheme="blue_yellow"):
     """
     Load instruction image or create a rendered instruction screen.
     If image_path is provided, loads that image. Otherwise, renders text instructions.
@@ -314,33 +234,27 @@ def load_instruction_image(screen_width, screen_height, image_path=None, color_s
         bg_color = BLACK
         text_color = WHITE
     else:  # blue_yellow (default)
-        bg_color = BLUE
-        text_color = YELLOW
+        bg_color = (0, 0, 255)  # BLUE
+        text_color = (255, 255, 0)  # YELLOW
     
     surface.fill(bg_color)
     
     # Default instruction text if none provided
     if not instruction_text:
-        instruction_text = """For the next several minutes, you will see a fixation cross alternate with a flashing checkerboard.
-
-
-Please keep your eyes open and fixed on the center of the screen.
-
-
-The task will start shortly."""
+        instruction_text = "Just relax and focus on the center of the screen.\n\nFirst there will be a period of acquisitions with no response.\n\nThen you will see a flashing checker pattern every now and then.\n\nPlease don't look away.\n\nThanks."
     
-    # Calculate font size based on screen
+    # Calculate font size based on screen (larger font for better readability)
     screen_height_px = screen_height
-    base_font_size = int(screen_height_px / 25)
-    font_size = max(24, base_font_size)
+    base_font_size = int(screen_height_px / 15)  # Increased from /18 for even larger text
+    font_size = max(42, base_font_size)  # Increased minimum from 36 to 42
     
     try:
         font = pygame.font.Font(None, font_size)
     except:
         font = pygame.font.SysFont("arial", font_size)
     
-    # Split text into lines and render
-    lines = [line.strip() for line in instruction_text.split('\n')]
+    # Split text into lines and render (preserve empty lines)
+    lines = instruction_text.split('\n')
     rendered_lines = []
     total_height = 0
     
@@ -348,10 +262,10 @@ The task will start shortly."""
         if line:
             rendered = font.render(line, True, text_color)
             rendered_lines.append(rendered)
-            total_height += rendered.get_height() + 10
+            total_height += rendered.get_height() + 25  # Increased spacing from 10 to 25
         else:
             rendered_lines.append(None)
-            total_height += 20
+            total_height += 35  # Increased spacing from 20 to 35
     
     # Center vertically
     y_start = (screen_height - total_height) // 2
@@ -362,9 +276,9 @@ The task will start shortly."""
         if rendered:
             rect = rendered.get_rect(centerx=screen_width // 2, top=current_y)
             surface.blit(rendered, rect)
-            current_y += rendered.get_height() + 10
+            current_y += rendered.get_height() + 25  # Increased spacing from 10 to 25
         else:
-            current_y += 20
+            current_y += 35  # Increased spacing from 20 to 35
     
     scheme_name = "blue-yellow" if color_scheme.lower() == "blue_yellow" else "black-white"
     print(f"Instruction screen created: {scheme_name} (background: {scheme_name.split('-')[0]}, text: {scheme_name.split('-')[1]})")
@@ -462,7 +376,7 @@ def show_message(screen, text, wait_for_input=True, escape_cancels=True):
 
 
 def show_fixation(screen, fixation_image, duration, escape_cancels=True):
-    """Display fixation cross/image for specified duration with precise timing."""
+    """Display fixation cross/image for specified duration."""
     if not screen:
         return True
         
@@ -471,23 +385,20 @@ def show_fixation(screen, fixation_image, duration, escape_cancels=True):
     pygame.display.flip()
     
     start_time = time.perf_counter()
-    end_time = start_time + duration
-    
-    while time.perf_counter() < end_time:
+    while time.perf_counter() - start_time < duration:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
             if escape_cancels and event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
-        # Reduced sleep for better timing precision
-        time.sleep(0.005)
+        time.sleep(0.01)
     
     return True
 
 
 def show_instruction_image(screen, instruction_image, duration, escape_cancels=True):
-    """Display instruction image for specified duration (during dummy scans) with precise timing."""
+    """Display instruction image for specified duration (during dummy scans)."""
     if not screen or not instruction_image:
         return True
     
@@ -496,38 +407,31 @@ def show_instruction_image(screen, instruction_image, duration, escape_cancels=T
     pygame.display.flip()
     
     start_time = time.perf_counter()
-    end_time = start_time + duration
-    
-    while time.perf_counter() < end_time:
+    while time.perf_counter() - start_time < duration:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
             if escape_cancels and event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
-        # Reduced sleep for better timing precision
-        time.sleep(0.005)
+        time.sleep(0.01)
     
     return True
 
 
 def show_flashing_checkerboard(screen, img1, img2, duration, frequency, escape_cancels=True):
-    """
-    Display alternating checkerboard images at specified frequency.
-    Uses high-precision timing to ensure accurate flash frequency.
-    """
+    """Display alternating checkerboard images at specified frequency."""
     if not screen or not img1 or not img2:
         return True
     
-    frame_duration = 1.0 / frequency / 2.0  # Half period for each image (125ms for 8 Hz)
+    frame_duration = 1.0 / frequency / 2.0  # Half period for each image
     start_time = time.perf_counter()
     end_time = start_time + duration
     current_image = True  # True for img1, False for img2
     last_flip_time = start_time
-    frame_count = 0
     
     while time.perf_counter() < end_time:
-        # Check for events (non-blocking)
+        # Check for events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -535,7 +439,7 @@ def show_flashing_checkerboard(screen, img1, img2, duration, frequency, escape_c
                 if event.key == pygame.K_ESCAPE:
                     return False
         
-        # Flip images at the specified frequency with precise timing
+        # Flip images at the specified frequency
         current_time = time.perf_counter()
         if current_time >= last_flip_time + frame_duration:
             screen.fill(BLACK)
@@ -545,47 +449,19 @@ def show_flashing_checkerboard(screen, img1, img2, duration, frequency, escape_c
                 screen.blit(img2, (0, 0))
             pygame.display.flip()
             current_image = not current_image
-            frame_count += 1
-            # Use additive timing to prevent drift accumulation
             last_flip_time += frame_duration
         
-        # Small sleep to prevent CPU spinning (minimal impact on timing)
-        time.sleep(0.0001)  # Reduced from 0.001 for better precision
-    
-    # Verify timing accuracy (for debugging/logging)
-    actual_duration = time.perf_counter() - start_time
-    expected_frames = int(duration * frequency * 2)  # 2 frames per flash cycle
-    if abs(frame_count - expected_frames) > 2:  # Allow small tolerance
-        print(f"  Warning: Frame count ({frame_count}) differs from expected ({expected_frames})")
+        # Small sleep to prevent CPU spinning
+        time.sleep(0.001)
     
     return True
 
 
 # --- Wait for Start ---
 def wait_for_start(screen, trigger_handler, config, escape_cancels=True):
-    """Wait for start signal based on configured start mode."""
-    trigger_char = config.get("trigger_character", "=")
-    start_mode = config.get("start_mode", "both").lower()
-    
-    # Build message based on start mode
-    if start_mode == "manual":
-        message = f"""fMRI Visual Task - Ready to Start
-
-Waiting for manual start...
-
-Press SPACEBAR to start
-
-Press ESC to cancel"""
-    elif start_mode == "trigger":
-        message = f"""fMRI Visual Task - Ready to Start
-
-Waiting for scanner trigger signal...
-
-Trigger character: '{trigger_char}'
-
-Press ESC to cancel"""
-    else:  # "both" - default
-        message = f"""fMRI Visual Task - Ready to Start
+    """Wait for either spacebar press or trigger signal to start."""
+    trigger_char = config.get("trigger_character", "5")
+    message = f"""fMRI Visual Task - Ready to Start
 
 Waiting for start signal...
 
@@ -627,27 +503,25 @@ Press ESC to cancel"""
     
     pygame.display.flip()
     
-    # Wait for start signal based on mode
+    # Wait for start signal
     while True:
         # Check keyboard events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
             if event.type == pygame.KEYDOWN:
-                # Manual start (spacebar) - only if mode is "manual" or "both"
-                if event.key == pygame.K_SPACE and start_mode in ["manual", "both"]:
+                if event.key == pygame.K_SPACE:
                     print("Start signal received: SPACEBAR")
                     return True
-                # Trigger character start - only if mode is "trigger" or "both"
-                if start_mode in ["trigger", "both"]:
-                    if event.unicode and event.unicode.lower() == trigger_char.lower():
-                        print(f"Start signal received: Trigger character '{trigger_char}'")
-                        return True
+                # Check for trigger character key press
+                if event.unicode and event.unicode.lower() == trigger_char.lower():
+                    print(f"Start signal received: Trigger character '{trigger_char}'")
+                    return True
                 if escape_cancels and event.key == pygame.K_ESCAPE:
                     return False
         
-        # Check for trigger signal from serial port (if configured and mode allows triggers)
-        if start_mode in ["trigger", "both"] and trigger_handler and trigger_handler.check_trigger():
+        # Check for trigger signal from serial port (if configured)
+        if trigger_handler and trigger_handler.check_trigger():
             print(f"Start signal received: Serial port trigger")
             return True
         
@@ -665,21 +539,26 @@ def run_task(screen, config):
     screen_width, screen_height = screen.get_size()
     
     # Load fixation image
-    color_scheme = config.get("color_scheme", "blue_yellow")
-    fixation_image = load_fixation_image(screen_width, screen_height, config.get("fixation_image"), color_scheme)
+    fixation_img_path = None
+    if config.get("fixation_image"):
+        images_dir = resource_path("images")
+        fixation_img_path = os.path.join(images_dir, config["fixation_image"])
+    
+    fixation_image = load_fixation_image(screen_width, screen_height, fixation_img_path)
     
     # Load or create instruction screen (for dummy scans)
     instruction_image = None
     instruction_duration = config.get("instruction_duration", 10.0)
     instruction_text = config.get("instruction_text")
+    color_scheme = config.get("color_scheme", "blue_yellow")
     
     # Always create instruction screen (either from image or rendered text)
     # If instruction_image is None, it will render text automatically
     instruction_image = load_instruction_image(
         screen_width, screen_height, 
         config.get("instruction_image"), 
-        color_scheme,
-        instruction_text
+        instruction_text,
+        color_scheme
     )
     
     if instruction_image:
@@ -694,26 +573,9 @@ def run_task(screen, config):
         config["checkerboard_image2"]
     )
     
-    # Validate all critical images are loaded before starting task
     if not checkerboard1 or not checkerboard2:
-        error_msg = f"ERROR: Could not load checkerboard images.\n\n"
-        error_msg += f"Expected: {config['checkerboard_image1']}, {config['checkerboard_image2']}\n\n"
-        error_msg += "Please verify images exist in the 'images' folder.\n\n"
-        error_msg += "Press SPACEBAR to exit."
-        show_message(screen, error_msg, wait_for_input=True, escape_cancels=True)
-        return False
-    
-    if not fixation_image:
-        error_msg = "ERROR: Could not create or load fixation image.\n\n"
-        error_msg += "Press SPACEBAR to exit."
-        show_message(screen, error_msg, wait_for_input=True, escape_cancels=True)
-        return False
-    
-    # Validate timing parameters
-    if CHECKERBOARD_DURATION <= 0 or FIXATION_DURATION <= 0:
-        error_msg = "ERROR: Invalid timing parameters.\n\n"
-        error_msg += "Press SPACEBAR to exit."
-        show_message(screen, error_msg, wait_for_input=True, escape_cancels=True)
+        show_message(screen, "ERROR: Could not load checkerboard images.\n\nPress any key to exit.", 
+                   wait_for_input=True, escape_cancels=True)
         return False
     
     # Initialize trigger handler
@@ -730,67 +592,46 @@ def run_task(screen, config):
         
         print("Task started!")
         start_time = time.perf_counter()
-        task_start_timestamp = datetime.now()
         
-        # Log initial timestamp for clinical research verification
-        print(f"Task start timestamp: {task_start_timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
-        
-        # Show instruction screen during dummy scans/discarded acquisitions
+        # Show instruction image during dummy scans/discarded acquisitions
         if instruction_image:
-            print(f"\n--- Instruction Screen (Dummy Scans) ---")
-            instruction_start = time.perf_counter()
-            instruction_timestamp = datetime.now()
-            print(f"  Instruction start timestamp: {instruction_timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
-            print(f"  Displaying instruction screen for {instruction_duration}s...")
+            print(f"\n--- Instruction Image (Dummy Scans) ---")
+            print(f"  Displaying instruction image for {instruction_duration}s...")
             if not show_instruction_image(screen, instruction_image, instruction_duration):
-                print("Task cancelled during instruction screen.")
+                print("Task cancelled during instruction image.")
                 return False
-            instruction_actual = time.perf_counter() - instruction_start
-            print(f"  Instruction screen completed (actual: {instruction_actual:.3f}s, expected: {instruction_duration:.1f}s)")
+            print(f"  Instruction image completed.")
         
         # Run 5 cycles
         for cycle in range(1, NUM_CYCLES + 1):
             print(f"\n--- Cycle {cycle} of {NUM_CYCLES} ---")
-            cycle_start = time.perf_counter()
-            cycle_timestamp = datetime.now()
-            print(f"  Cycle {cycle} start timestamp: {cycle_timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
             
             # Fixation phase (20 seconds)
             print(f"  Fixation phase ({FIXATION_DURATION}s)...")
-            fixation_start = time.perf_counter()
+            cycle_start = time.perf_counter()
             if not show_fixation(screen, fixation_image, FIXATION_DURATION):
                 print("Task cancelled during fixation.")
                 return False
-            fixation_actual = time.perf_counter() - fixation_start
-            print(f"    Fixation completed (actual: {fixation_actual:.3f}s, expected: {FIXATION_DURATION:.1f}s)")
             
             # Checkerboard phase (20 seconds, 8 Hz flashing)
             print(f"  Checkerboard phase ({CHECKERBOARD_DURATION}s, {FLASH_FREQUENCY} Hz)...")
-            checkerboard_start = time.perf_counter()
             if not show_flashing_checkerboard(screen, checkerboard1, checkerboard2, 
                                             CHECKERBOARD_DURATION, FLASH_FREQUENCY):
                 print("Task cancelled during checkerboard.")
                 return False
-            checkerboard_actual = time.perf_counter() - checkerboard_start
-            print(f"    Checkerboard completed (actual: {checkerboard_actual:.3f}s, expected: {CHECKERBOARD_DURATION:.1f}s)")
             
             cycle_duration = time.perf_counter() - cycle_start
-            print(f"  Cycle {cycle} completed in {cycle_duration:.2f}s (expected: {FIXATION_DURATION + CHECKERBOARD_DURATION:.1f}s)")
+            print(f"  Cycle {cycle} completed in {cycle_duration:.2f}s")
         
         total_duration = time.perf_counter() - start_time
-        expected_duration = NUM_CYCLES * (FIXATION_DURATION + CHECKERBOARD_DURATION) + instruction_duration
-        task_end_timestamp = datetime.now()
-        timing_drift = total_duration - expected_duration
+        expected_duration = NUM_CYCLES * (FIXATION_DURATION + CHECKERBOARD_DURATION)
+        if instruction_image:
+            expected_duration += instruction_duration
         
         print(f"\n{'=' * 60}")
         print(f"Task completed successfully!")
-        print(f"Task end timestamp: {task_end_timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
-        print(f"Total duration: {total_duration:.3f}s")
+        print(f"Total duration: {total_duration:.2f}s")
         print(f"Expected duration: {expected_duration:.1f}s")
-        if abs(timing_drift) > 0.1:  # Warn if drift > 100ms
-            print(f"WARNING: Timing drift detected: {timing_drift:.3f}s")
-        else:
-            print(f"Timing accuracy: {abs(timing_drift):.3f}s drift (within acceptable range)")
         print(f"{'=' * 60}\n")
         
         # Show completion message
@@ -818,11 +659,7 @@ def main():
     # Load configuration
     config = load_config()
     print(f"Configuration loaded.")
-    print(f"  Color scheme: {config.get('color_scheme', 'blue_yellow')}")
     print(f"  Trigger character: '{config['trigger_character']}'")
-    print(f"  Start mode: {config.get('start_mode', 'both')}")
-    fixation_display = config.get('fixation_image') if config.get('fixation_image') else 'rendered programmatically'
-    print(f"  Fixation: {fixation_display}")
     print(f"  Checkerboard images: {config['checkerboard_image1']}, {config['checkerboard_image2']}")
     
     # Initialize Pygame

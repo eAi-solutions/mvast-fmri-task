@@ -29,19 +29,19 @@ python3 -m pip install pygame
 ### 3. Navigate to the Program Folder
 
 ```bash
-cd path/to/mvast_fmri_task
+cd path/to/fmri_task
 ```
 
 ### 4. Run the Program
 
 ```bash
-python mvast_fmri_task.py
+python fmri_task.py
 ```
 
 Or:
 
 ```bash
-python3 mvast_fmri_task.py
+python3 fmri_task.py
 ```
 
 ### 5. Start the Task
@@ -64,7 +64,7 @@ The program will:
 
 ## Configuration
 
-On first run, a `mvast_fmri_task_config.json` file will be created. Edit it to change the trigger character if needed.
+On first run, a `fmri_task_config.json` file will be created. Edit it to change the trigger character if needed.
 
 ## Need Help?
 

@@ -18,12 +18,13 @@ This program is designed to run on a **presentation computer** that is mirrored 
 
 - **Migraine History**: Participants with a history of migraine or photosensitivity should **NOT** perform this task, as flashing visual stimuli may trigger adverse reactions.
 - **Adverse Events**: Visual flashing stimuli may cause discomfort, headaches, or other adverse reactions in some individuals. Researchers should be prepared to monitor participants and respond to any adverse events.
-- **Participant Responsibility**: Participants should be informed that they participate at their own risk and should immediately stop the task if they experience any discomfort, dizziness, nausea, or other adverse symptoms.
+- **Photosensitive Epilepsy & Seizure Disorders**: Individuals with any history of epilepsy, seizures, photosensitive epilepsy, or unexplained loss of consciousness should **NOT** perform this task unless cleared in writing by a qualified medical professional. Rapid flashing stimuli are a known seizure trigger; screen participants thoroughly, review anti-seizure medications, and ensure the study team is prepared to terminate the task immediately and initiate emergency protocols if prodromal symptoms (aura, visual disturbances, muscle twitching, unusual sensations) are reported.
+- **Participant Responsibility**: Participants should be informed that they participate at their own risk and should immediately stop the task if they experience any discomfort, dizziness, nausea, visual disturbances, aura, or other adverse symptoms.
 - **Researcher Monitoring**: Researchers should monitor participants throughout the task and be prepared to stop the task immediately if any adverse reactions occur.
 
 **Best Practices:**
 - Always obtain informed consent before participation
-- Screen participants for contraindications (migraine history, photosensitivity, etc.)
+- Screen participants for contraindications (migraine history, seizures, photosensitivity, etc.), and obtain written medical clearance for any participant with a seizure history before proceeding
 - Provide clear instructions about the ability to stop at any time
 - Have a researcher present to monitor for adverse reactions
 - Ensure participants understand they can withdraw at any time without penalty
@@ -463,7 +464,6 @@ mvast_fmri_task/
 ├── mvast_fmri_task.py              # Main application
 ├── mvast_fmri_task_config.json     # Configuration file (created on first run)
 ├── requirements.txt                 # Python dependencies
-├── LICENSE                          # MIT License
 ├── images/                          # Image assets folder
 │   ├── acheck_by.png               # Blue-yellow checkerboard 1
 │   ├── acheck_by_.png              # Blue-yellow checkerboard 2
